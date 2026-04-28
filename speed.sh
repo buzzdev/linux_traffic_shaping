@@ -1,3 +1,4 @@
 #!/bin/bash
+source "$(dirname "$0")/config.sh"
 
-speedometer -k 256 -r enp0s25 -s
+speedometer -k $SPEED_SCALE -r $IFACE_WIFI -s
