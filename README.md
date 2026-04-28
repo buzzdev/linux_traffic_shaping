@@ -21,8 +21,8 @@ Designed to run on a Raspberry Pi (or any Linux machine with **two network inter
 ```
 Internet ── [Router] ──(eth0)── Linux Host ──(wlan0/hotspot)── Clients
                          ↑            ↑               ↑
-                    upstream       IP forward      tc TBF shaping
-                    internet       + NAT           on wlan (egress)
+                    upstream       nmcli handles   tc TBF shaping
+                    internet       DHCP + NAT      on wlan (egress)
 ```
 
 **Two network interfaces are required:**
@@ -32,7 +32,7 @@ Internet ── [Router] ──(eth0)── Linux Host ──(wlan0/hotspot)─�
 | Ethernet (`eth`) | Uplink — receives internet from the upstream router                 | `eth0`, `enp0s31f6`  |
 | WiFi (`wlan`)    | Hotspot — clients connect here; traffic is shaped on this interface | `wlan0`, `wlp0s20f3` |
 
-The Linux host acts as a router: it receives internet on the Ethernet interface and re-shares it over WiFi. IP forwarding and NAT (`iptables` masquerade) route traffic between the two interfaces. LTS then applies `tc qdisc` Token Bucket Filter shaping on the WiFi egress, throttling all bandwidth seen by connected clients.
+The Linux host acts as a router: it receives internet on the Ethernet interface and re-shares it over WiFi. `nmcli device wifi hotspot` (used by the Web UI and the hotspot startup command below) automatically configures IP forwarding, a built-in DHCP server, and NAT masquerade — no manual network setup is required. LTS then applies `tc qdisc` Token Bucket Filter shaping on the WiFi egress, throttling all bandwidth seen by connected clients.
 
 The Docker container uses `network_mode: host` and `CAP_NET_ADMIN` so it operates directly on the host's real network interfaces. Caddy serves the frontend and proxies API/WebSocket traffic to FastAPI — both bind to all host IPs automatically, making the Web UI reachable from both the Ethernet and WiFi networks.
 
@@ -42,12 +42,12 @@ The Docker container uses `network_mode: host` and `CAP_NET_ADMIN` so it operate
 
 **Host (target Linux machine):**
 
-| Requirement       | Notes                                                                             |
-| ----------------- | --------------------------------------------------------------------------------- |
-| Linux kernel 4.x+ | Any modern distro: Raspberry Pi OS Bookworm, Ubuntu 22.04+, Debian 12+            |
-| Docker Engine 24+ | [Install guide](https://docs.docker.com/engine/install/)                          |
-| Docker Compose v2 | Included with Docker Desktop; `docker compose` (not `docker-compose`)             |
-| NetworkManager    | Only needed for WiFi hotspot feature. Install: `sudo apt install network-manager` |
+| Requirement       | Notes                                                                                                                      |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Linux kernel 4.x+ | Any modern distro: Raspberry Pi OS Bookworm, Ubuntu 22.04+, Debian 12+                                                     |
+| Docker Engine 24+ | [Install guide](https://docs.docker.com/engine/install/)                                                                   |
+| Docker Compose v2 | Included with Docker Desktop; `docker compose` (not `docker-compose`)                                                      |
+| NetworkManager    | Required for WiFi hotspot. Handles IP forwarding, DHCP, and NAT automatically. Install: `sudo apt install network-manager` |
 
 **For local development (macOS/Windows):**
 
@@ -57,48 +57,6 @@ The Docker container uses `network_mode: host` and `CAP_NET_ADMIN` so it operate
 | Node.js 20+    | For running the Vite dev server locally |
 
 > **Note:** `tc` traffic shaping and WiFi hotspot management only work on a real Linux host. On macOS/Windows the UI and API work but shaping commands have no effect.
-
----
-
-## Network setup (host prerequisites)
-
-Before starting the Docker stack, the host must be configured to bridge WiFi clients to the internet via the Ethernet interface. This is a one-time setup.
-
-### 1. Enable IP forwarding
-
-```bash
-# Apply immediately
-sudo sysctl -w net.ipv4.ip_forward=1
-
-# Persist across reboots
-echo "net.ipv4.ip_forward=1" | sudo tee /etc/sysctl.d/99-ipforward.conf
-```
-
-### 2. Add NAT masquerade rule
-
-Replace `eth0` with your actual Ethernet interface name:
-
-```bash
-sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-```
-
-To persist the rule across reboots:
-
-```bash
-sudo apt install iptables-persistent
-sudo netfilter-persistent save
-```
-
-### 3. Start the WiFi hotspot
-
-Use the **Web UI** (recommended — see [WiFi hotspot](#wifi-hotspot) in Usage), or manually via `nmcli`:
-
-```bash
-# Replace wlan0, MyNetwork, and MyPassword with your values
-sudo nmcli device wifi hotspot ifname wlan0 ssid MyNetwork password MyPassword
-```
-
-Once these three steps are done, devices connected to the WiFi hotspot will have internet access through the Ethernet uplink, and LTS can shape their bandwidth.
 
 ---
 
