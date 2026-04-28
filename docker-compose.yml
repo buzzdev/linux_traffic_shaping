@@ -1,0 +1,39 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Linux Traffic Shaper — Docker Compose stack
+#
+# Topology:
+#   Internet ── [Router] ──(eth)── RPi ──(wlan/hotspot)── Clients
+#                                          ↑
+#                          tc TBF shaping on wlan interface
+#
+# Both services use network_mode: host so:
+#   • Caddy binds :80/:443 on ALL host IPs (eth + wlan) automatically
+#   • The backend can call tc/ip on the host's real network interfaces
+#   • Caddy reaches the backend via localhost:8000
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  backend:
+    build: ./backend
+    network_mode: host
+    cap_add:
+      - NET_ADMIN        # required for tc qdisc manipulation
+    restart: unless-stopped
+
+  caddy:
+    build: ./frontend    # multi-stage: node build → caddy:2-alpine
+    network_mode: host
+    volumes:
+      # Caddyfile with tls internal directive
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Persistent storage for Caddy's internal CA cert and ACME state
+      - caddy_data:/data
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  # Keeps the Caddy internal CA root cert alive across container restarts,
+  # so browsers only need to trust it once.
+  caddy_data:

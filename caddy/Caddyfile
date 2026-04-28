@@ -1,0 +1,31 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Linux Traffic Shaper — Caddyfile
+#
+# network_mode: host means Caddy binds port 443 on ALL host IPs
+# (both the eth upstream IP and the wlan/hotspot IP) automatically.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# HTTPS with a locally-signed CA cert (no public domain required).
+# Trust the Caddy root CA on client devices to silence the browser warning:
+#   docker exec <caddy-container> caddy trust
+:443 {
+    tls internal
+
+    # Serve the pre-built React SPA
+    root * /srv
+    file_server
+
+    # Proxy REST API to FastAPI backend
+    reverse_proxy /api/* localhost:8000
+
+    # Proxy WebSocket stats stream to FastAPI backend
+    reverse_proxy /ws/* localhost:8000
+
+    # SPA fallback: let React Router (if added later) handle unknown paths
+    try_files {path} /index.html
+}
+
+# Redirect plain HTTP to HTTPS
+:80 {
+    redir https://{host}{uri} permanent
+}
