@@ -1,0 +1,9 @@
+# macOS local-dev override.
+# Swaps backend from network_mode: host to bridge networking so that
+# port 8000 is forwarded to the Mac's localhost (required on macOS).
+# tc/ip commands won't affect real interfaces, but the UI will load.
+services:
+  backend:
+    network_mode: bridge
+    ports:
+      - "8000:8000"
