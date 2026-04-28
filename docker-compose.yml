@@ -19,6 +19,11 @@ services:
     network_mode: host
     cap_add:
       - NET_ADMIN        # required for tc qdisc manipulation
+    volumes:
+      # D-Bus socket so nmcli inside the container can reach the host's NetworkManager
+      - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket
+      # Persistent storage for hotspot config (SSID, password, auto-start flag)
+      - hotspot_data:/app/data
     restart: unless-stopped
 
   caddy:
@@ -37,3 +42,5 @@ volumes:
   # Keeps the Caddy internal CA root cert alive across container restarts,
   # so browsers only need to trust it once.
   caddy_data:
+  # Persists hotspot config across container restarts.
+  hotspot_data:

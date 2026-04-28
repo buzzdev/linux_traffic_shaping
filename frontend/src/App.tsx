@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchRates, fetchStatus, type StatusInfo } from './api/client'
+import HotspotControl from './components/HotspotControl'
 import InterfaceSelector from './components/InterfaceSelector'
 import NetworkChart from './components/NetworkChart'
 import RateControl from './components/RateControl'
@@ -69,6 +70,8 @@ export default function App() {
             rates={rates}
             onStatusChange={handleStatusChange}
           />
+
+          <HotspotControl />
         </aside>
 
         {/* Right panel: live chart */}

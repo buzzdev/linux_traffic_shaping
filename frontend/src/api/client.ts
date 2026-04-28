@@ -91,3 +91,52 @@ export function createStatsSocket(
 
   return () => ws.close()
 }
+
+// ── Hotspot API ──────────────────────────────────────────────────────────────
+
+export interface HotspotStatus {
+  available: boolean
+  active: boolean
+  ssid: string | null
+  iface: string | null
+  auto_start: boolean
+}
+
+export interface HotspotConfig {
+  ssid: string
+  iface: string
+  auto_start: boolean
+}
+
+export async function fetchHotspotStatus(): Promise<HotspotStatus> {
+  const res = await _checkResponse(await fetch('/api/hotspot'))
+  return res.json()
+}
+
+export async function fetchHotspotConfig(): Promise<HotspotConfig> {
+  const res = await _checkResponse(await fetch('/api/hotspot/config'))
+  return res.json()
+}
+
+export async function configureHotspot(
+  ssid: string,
+  password: string,
+  iface: string,
+  auto_start: boolean,
+): Promise<HotspotStatus> {
+  const res = await _checkResponse(
+    await fetch('/api/hotspot/configure', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ssid, password, iface, auto_start }),
+    }),
+  )
+  return res.json()
+}
+
+export async function stopHotspot(): Promise<HotspotStatus> {
+  const res = await _checkResponse(
+    await fetch('/api/hotspot/stop', { method: 'POST' }),
+  )
+  return res.json()
+}
