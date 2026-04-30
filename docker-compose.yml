@@ -19,9 +19,14 @@ services:
     network_mode: host
     cap_add:
       - NET_ADMIN        # required for tc qdisc manipulation
+    security_opt:
+      - apparmor:unconfined  # allow nmcli to connect to the host D-Bus socket
     volumes:
       # D-Bus socket so nmcli inside the container can reach the host's NetworkManager
       - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket
+      # Mount host's nmcli so its version matches the host's NetworkManager daemon,
+      # avoiding API breakage from the container image's newer nmcli build.
+      - /usr/bin/nmcli:/usr/bin/nmcli:ro
       # Persistent storage for hotspot config (SSID, password, auto-start flag)
       - hotspot_data:/app/data
     restart: unless-stopped
