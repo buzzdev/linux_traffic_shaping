@@ -224,7 +224,7 @@ def _fix_forwarding(hotspot_iface: str) -> None:
 
     # Detect the DOCKER-USER chain — only present when Docker Engine is running
     probe = subprocess.run(
-        ["iptables", "-L", "DOCKER-USER", "-n"],
+        ["/usr/sbin/iptables", "-L", "DOCKER-USER", "-n"],
         capture_output=True, shell=False,
     )
     if probe.returncode != 0:
@@ -233,14 +233,14 @@ def _fix_forwarding(hotspot_iface: str) -> None:
 
     rules = [
         # Allow all forwarded traffic originating from the hotspot interface
-        ["iptables", "-C", "DOCKER-USER", "-i", hotspot_iface, "-j", "ACCEPT"],
+        ["/usr/sbin/iptables", "-C", "DOCKER-USER", "-i", hotspot_iface, "-j", "ACCEPT"],
         # Allow return traffic back to hotspot clients
-        ["iptables", "-C", "DOCKER-USER", "-o", hotspot_iface,
+        ["/usr/sbin/iptables", "-C", "DOCKER-USER", "-o", hotspot_iface,
          "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT"],
     ]
     insert_rules = [
-        ["iptables", "-I", "DOCKER-USER", "-i", hotspot_iface, "-j", "ACCEPT"],
-        ["iptables", "-I", "DOCKER-USER", "-o", hotspot_iface,
+        ["/usr/sbin/iptables", "-I", "DOCKER-USER", "-i", hotspot_iface, "-j", "ACCEPT"],
+        ["/usr/sbin/iptables", "-I", "DOCKER-USER", "-o", hotspot_iface,
          "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT"],
     ]
     for check, insert in zip(rules, insert_rules):
