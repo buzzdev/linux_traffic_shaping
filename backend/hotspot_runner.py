@@ -150,6 +150,14 @@ def start_hotspot(ssid: str, password: str, iface: str) -> None:
         shell=False,
     )
 
+    # Disconnect the interface first — NM rejects AP creation on a managed/connected device
+    subprocess.run(
+        ["nmcli", "device", "disconnect", iface],
+        capture_output=True,
+        timeout=10,
+        shell=False,
+    )
+
     result = subprocess.run(
         [
             "nmcli", "device", "wifi", "hotspot",
