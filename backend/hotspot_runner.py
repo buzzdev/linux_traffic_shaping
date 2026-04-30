@@ -14,6 +14,8 @@ CONFIG_FILE = DATA_DIR / "hotspot_config.json"
 
 _IFACE_RE = re.compile(r"^[a-zA-Z0-9._:-]{1,15}$")
 _NM_PROFILE_NAME = "Hotspot"
+_NM_CONNECTIONS_DIR = Path("/etc/NetworkManager/system-connections")
+_NM_PROFILE_FILE = _NM_CONNECTIONS_DIR / f"{_NM_PROFILE_NAME}.nmconnection"
 
 # Standard D-Bus socket paths (both resolve to the same socket on most distros)
 _DBUS_PATHS = [
@@ -127,10 +129,41 @@ def get_hotspot_status() -> HotspotStatus:
     return HotspotStatus(available=True, active=False, auto_start=auto_start)
 
 
+def _write_nm_profile(ssid: str, password: str, iface: str) -> None:
+    """Write a NetworkManager .nmconnection file for the hotspot."""
+    _NM_CONNECTIONS_DIR.mkdir(parents=True, exist_ok=True)
+    content = (
+        "[connection]\n"
+        f"id={_NM_PROFILE_NAME}\n"
+        "type=wifi\n"
+        f"interface-name={iface}\n"
+        "autoconnect=false\n"
+        "\n"
+        "[wifi]\n"
+        "mode=ap\n"
+        f"ssid={ssid}\n"
+        "band=bg\n"
+        "\n"
+        "[wifi-security]\n"
+        "key-mgmt=wpa-psk\n"
+        f"psk={password}\n"
+        "\n"
+        "[ipv4]\n"
+        "method=shared\n"
+        "\n"
+        "[ipv6]\n"
+        "method=ignore\n"
+    )
+    _NM_PROFILE_FILE.write_text(content)
+    _NM_PROFILE_FILE.chmod(0o600)
+
+
 def start_hotspot(ssid: str, password: str, iface: str) -> None:
     """
-    Create and activate a WiFi hotspot via nmcli.
-    Deletes any existing 'Hotspot' profile first to allow reconfiguration.
+    Create and activate a WiFi hotspot.
+    Writes the NM connection profile directly to disk to avoid polkit
+    restrictions on D-Bus connection-creation from inside a container,
+    then reloads NM and brings the connection up.
     """
     _validate_iface(iface)
     _validate_ssid(ssid)
@@ -142,29 +175,25 @@ def start_hotspot(ssid: str, password: str, iface: str) -> None:
             "Ensure the D-Bus socket is mounted and NetworkManager is running on the host."
         )
 
-    # Delete old profile so SSID/password changes take effect (ignore errors)
-    subprocess.run(
-        ["nmcli", "con", "delete", _NM_PROFILE_NAME],
+    # Write the connection profile directly — avoids polkit 'create connection' check
+    _write_nm_profile(ssid, password, iface)
+
+    # Tell NM to pick up the new/updated file
+    reload = subprocess.run(
+        ["nmcli", "con", "reload"],
         capture_output=True,
+        text=True,
         timeout=10,
         shell=False,
     )
+    if reload.returncode != 0:
+        raise RuntimeError(
+            f"Failed to reload NM connections: {reload.stderr.strip() or reload.stdout.strip()}"
+        )
 
-    # Disconnect the interface first — NM rejects AP creation on a managed/connected device
-    subprocess.run(
-        ["nmcli", "device", "disconnect", iface],
-        capture_output=True,
-        timeout=10,
-        shell=False,
-    )
-
+    # Activate the profile
     result = subprocess.run(
-        [
-            "nmcli", "device", "wifi", "hotspot",
-            "ifname", iface,
-            "ssid", ssid,
-            "password", password,
-        ],
+        ["nmcli", "con", "up", _NM_PROFILE_NAME],
         capture_output=True,
         text=True,
         timeout=30,
@@ -183,16 +212,17 @@ def stop_hotspot(iface: str) -> None:
     if not _nmcli_available():
         raise RuntimeError("NetworkManager is not reachable.")
 
-    # Best-effort disconnect; may already be down
+    # Bring down the connection and remove the profile file
     subprocess.run(
-        ["nmcli", "device", "disconnect", iface],
+        ["nmcli", "con", "down", _NM_PROFILE_NAME],
         capture_output=True,
         text=True,
         timeout=15,
         shell=False,
     )
+    _NM_PROFILE_FILE.unlink(missing_ok=True)
     subprocess.run(
-        ["nmcli", "con", "delete", _NM_PROFILE_NAME],
+        ["nmcli", "con", "reload"],
         capture_output=True,
         timeout=10,
         shell=False,

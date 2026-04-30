@@ -26,6 +26,9 @@ services:
       # Mount host's nmcli so its version matches the host's NetworkManager daemon,
       # avoiding API breakage from the container image's newer nmcli build.
       - /usr/bin/nmcli:/usr/bin/nmcli:ro
+      # NM connection profiles dir — lets the backend write .nmconnection files
+      # directly, bypassing polkit restrictions on D-Bus connection creation.
+      - /etc/NetworkManager/system-connections:/etc/NetworkManager/system-connections
       # Persistent storage for hotspot config (SSID, password, auto-start flag)
       - hotspot_data:/app/data
     restart: unless-stopped
