@@ -8,6 +8,7 @@ validated against strict whitelists before any subprocess call.
 import json
 import re
 import subprocess
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -21,6 +22,11 @@ except Exception:
 
 # Cache online OUI results so we never re-query the same MAC
 _vendor_cache: dict[str, Optional[str]] = {}
+
+# Keep clients visible for this many seconds after they disappear from iw dump
+_CLIENT_TTL = 120  # seconds
+# {iface: {mac: (ClientInfo, last_seen_ts)}}
+_client_seen: dict[str, dict[str, tuple["ClientInfo", float]]] = {}
 
 
 def _lookup_vendor_online(mac: str) -> Optional[str]:
@@ -243,34 +249,52 @@ def get_clients(iface: str) -> list[ClientInfo]:
     Return connected WiFi stations on *iface* using `iw dev <iface> station dump`.
     Enriches each entry with IP from the ARP table and hostname from /etc/hosts
     or reverse DNS (best-effort).
+    Clients that disappear from the live dump (power-save) are retained for
+    _CLIENT_TTL seconds before being removed.
     """
     _validate_iface(iface)
 
     result = _run(["iw", "dev", iface, "station", "dump"], check=False)
-    if result.returncode != 0:
-        return []
 
     # Parse iw station dump output into per-MAC blocks
-    clients: dict[str, ClientInfo] = {}
+    live: dict[str, ClientInfo] = {}
     current_mac: Optional[str] = None
-    for line in result.stdout.splitlines():
-        mac_match = re.match(r"^Station\s+([0-9a-f:]{17})\s+", line, re.I)
-        if mac_match:
-            current_mac = mac_match.group(1).lower()
-            clients[current_mac] = ClientInfo(mac=current_mac)
-            continue
-        if current_mac is None:
-            continue
-        line = line.strip()
-        signal_match = re.match(r"signal:\s+(-\d+)\s+dBm", line)
-        if signal_match:
-            clients[current_mac].signal_dbm = int(signal_match.group(1))
-        tx_match = re.match(r"tx bitrate:\s+([\d.]+)\s+MBit/s", line)
-        if tx_match:
-            clients[current_mac].tx_kbps = int(float(tx_match.group(1)) * 1000)
-        rx_match = re.match(r"rx bitrate:\s+([\d.]+)\s+MBit/s", line)
-        if rx_match:
-            clients[current_mac].rx_kbps = int(float(rx_match.group(1)) * 1000)
+    if result.returncode == 0:
+        for line in result.stdout.splitlines():
+            mac_match = re.match(r"^Station\s+([0-9a-f:]{17})\s+", line, re.I)
+            if mac_match:
+                current_mac = mac_match.group(1).lower()
+                live[current_mac] = ClientInfo(mac=current_mac)
+                continue
+            if current_mac is None:
+                continue
+            line = line.strip()
+            signal_match = re.match(r"signal:\s+(-\d+)\s+dBm", line)
+            if signal_match:
+                live[current_mac].signal_dbm = int(signal_match.group(1))
+            tx_match = re.match(r"tx bitrate:\s+([\d.]+)\s+MBit/s", line)
+            if tx_match:
+                live[current_mac].tx_kbps = int(float(tx_match.group(1)) * 1000)
+            rx_match = re.match(r"rx bitrate:\s+([\d.]+)\s+MBit/s", line)
+            if rx_match:
+                live[current_mac].rx_kbps = int(float(rx_match.group(1)) * 1000)
+
+    now = time.monotonic()
+    seen = _client_seen.setdefault(iface, {})
+
+    # Update TTL cache with live entries
+    for mac, c in live.items():
+        seen[mac] = (c, now)
+
+    # Expire stale entries
+    expired = [mac for mac, (_, ts) in seen.items() if now - ts > _CLIENT_TTL]
+    for mac in expired:
+        del seen[mac]
+
+    # Merge: use live data where available, cached data for idle devices
+    clients: dict[str, ClientInfo] = {}
+    for mac, (c, _) in seen.items():
+        clients[mac] = live.get(mac, c)
 
     if not clients:
         return []
