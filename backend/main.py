@@ -22,6 +22,7 @@ from net_monitor import get_rate
 from tc_runner import (
     ALLOWED_RATES,
     clear_rate,
+    get_clients,
     get_interfaces,
     get_qdisc,
     set_rate,
@@ -85,6 +86,15 @@ class ApplyRequest(BaseModel):
 
 class RatesResponse(BaseModel):
     rates: list[int]
+
+
+class ClientInfo(BaseModel):
+    mac: str
+    ip: Optional[str] = None
+    hostname: Optional[str] = None
+    signal_dbm: Optional[int] = None
+    tx_kbps: Optional[int] = None
+    rx_kbps: Optional[int] = None
 
 
 class HotspotConfigureRequest(BaseModel):
@@ -196,6 +206,25 @@ def api_hotspot_configure(req: HotspotConfigureRequest) -> HotspotStatusResponse
         iface=s.iface,
         auto_start=s.auto_start,
     )
+
+
+@app.get("/api/clients/{iface}", response_model=list[ClientInfo])
+def api_clients(iface: str) -> list[ClientInfo]:
+    try:
+        clients = get_clients(iface)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return [
+        ClientInfo(
+            mac=c.mac,
+            ip=c.ip,
+            hostname=c.hostname,
+            signal_dbm=c.signal_dbm,
+            tx_kbps=c.tx_kbps,
+            rx_kbps=c.rx_kbps,
+        )
+        for c in clients
+    ]
 
 
 @app.post("/api/hotspot/stop", response_model=HotspotStatusResponse)

@@ -66,6 +66,22 @@ export async function clearRate(iface: string): Promise<StatusInfo> {
   return res.json()
 }
 
+export interface ClientInfo {
+  mac: string
+  ip: string | null
+  hostname: string | null
+  signal_dbm: number | null
+  tx_kbps: number | null
+  rx_kbps: number | null
+}
+
+export async function fetchClients(iface: string): Promise<ClientInfo[]> {
+  const res = await _checkResponse(
+    await fetch(`/api/clients/${encodeURIComponent(iface)}`),
+  )
+  return res.json()
+}
+
 /**
  * Open a WebSocket to /ws/stats?iface=<iface> and call onData on each frame.
  * Returns a cleanup function that closes the socket.

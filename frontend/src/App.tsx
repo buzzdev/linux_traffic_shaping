@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
-import { fetchRates, fetchStatus, type StatusInfo } from './api/client'
+import { fetchRates, fetchStatus, type HotspotStatus, type StatusInfo } from './api/client'
 import HotspotControl from './components/HotspotControl'
 import InterfaceSelector from './components/InterfaceSelector'
 import NetworkChart from './components/NetworkChart'
 import RateControl from './components/RateControl'
+import WifiClients from './components/WifiClients'
 
 export default function App() {
   const [selectedIface, setSelectedIface] = useState('')
   const [rates, setRates] = useState<number[]>([])
   const [status, setStatus] = useState<StatusInfo | null>(null)
+  const [hotspotStatus, setHotspotStatus] = useState<HotspotStatus | null>(null)
 
   useEffect(() => {
     fetchRates().then(setRates).catch(console.error)
@@ -72,14 +74,20 @@ export default function App() {
             onStatusChange={handleStatusChange}
           />
 
-          <HotspotControl />
+          <HotspotControl onStatusChange={setHotspotStatus} />
         </aside>
 
-        {/* Right panel: live chart */}
-        <section className="flex-1 p-6 min-h-[420px] lg:min-h-0 overflow-hidden">
-          <NetworkChart
-            iface={selectedIface}
-            limitKbps={shapingActive ? (status?.rate_kbps ?? null) : null}
+        {/* Right panel: live chart + client list */}
+        <section className="flex-1 p-6 min-h-[420px] lg:min-h-0 overflow-y-auto flex flex-col gap-6">
+          <div className="flex-1 min-h-[300px]">
+            <NetworkChart
+              iface={selectedIface}
+              limitKbps={shapingActive ? (status?.rate_kbps ?? null) : null}
+            />
+          </div>
+          <WifiClients
+            iface={hotspotStatus?.iface ?? selectedIface}
+            hotspotActive={hotspotStatus?.active ?? false}
           />
         </section>
       </main>

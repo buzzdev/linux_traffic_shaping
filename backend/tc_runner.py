@@ -160,3 +160,78 @@ def clear_rate(iface: str) -> None:
             raise RuntimeError(
                 f"tc qdisc del failed (rc={result.returncode}): {stderr}"
             )
+
+
+# ---------------------------------------------------------------------------
+# WiFi client list
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ClientInfo:
+    mac: str
+    ip: Optional[str] = None
+    hostname: Optional[str] = None
+    signal_dbm: Optional[int] = None
+    tx_kbps: Optional[int] = None
+    rx_kbps: Optional[int] = None
+
+
+def get_clients(iface: str) -> list[ClientInfo]:
+    """
+    Return connected WiFi stations on *iface* using `iw dev <iface> station dump`.
+    Enriches each entry with IP from the ARP table and hostname from /etc/hosts
+    or reverse DNS (best-effort).
+    """
+    _validate_iface(iface)
+
+    result = _run(["iw", "dev", iface, "station", "dump"], check=False)
+    if result.returncode != 0:
+        return []
+
+    # Parse iw station dump output into per-MAC blocks
+    clients: dict[str, ClientInfo] = {}
+    current_mac: Optional[str] = None
+    for line in result.stdout.splitlines():
+        mac_match = re.match(r"^Station\s+([0-9a-f:]{17})\s+", line, re.I)
+        if mac_match:
+            current_mac = mac_match.group(1).lower()
+            clients[current_mac] = ClientInfo(mac=current_mac)
+            continue
+        if current_mac is None:
+            continue
+        line = line.strip()
+        signal_match = re.match(r"signal:\s+(-\d+)\s+dBm", line)
+        if signal_match:
+            clients[current_mac].signal_dbm = int(signal_match.group(1))
+        tx_match = re.match(r"tx bitrate:\s+([\d.]+)\s+MBit/s", line)
+        if tx_match:
+            clients[current_mac].tx_kbps = int(float(tx_match.group(1)) * 1000)
+        rx_match = re.match(r"rx bitrate:\s+([\d.]+)\s+MBit/s", line)
+        if rx_match:
+            clients[current_mac].rx_kbps = int(float(rx_match.group(1)) * 1000)
+
+    if not clients:
+        return []
+
+    # Enrich with IP from ARP table (`ip -j neigh show dev <iface>`)
+    neigh = _run(["ip", "-j", "neigh", "show", "dev", iface], check=False)
+    if neigh.returncode == 0:
+        try:
+            for entry in json.loads(neigh.stdout):
+                mac = entry.get("lladdr", "").lower()
+                ip = entry.get("dst")
+                if mac in clients and ip:
+                    clients[mac].ip = ip
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+    # Best-effort hostname via reverse lookup
+    import socket
+    for c in clients.values():
+        if c.ip:
+            try:
+                c.hostname = socket.gethostbyaddr(c.ip)[0]
+            except (socket.herror, socket.gaierror):
+                pass
+
+    return list(clients.values())

@@ -8,7 +8,7 @@ import {
   type IfaceInfo,
 } from '../api/client'
 
-export default function HotspotControl() {
+export default function HotspotControl({ onStatusChange }: { onStatusChange?: (s: HotspotStatus) => void }) {
   const [status, setStatus] = useState<HotspotStatus | null>(null)
   const [ifaces, setIfaces] = useState<IfaceInfo[]>([])
 
@@ -22,9 +22,14 @@ export default function HotspotControl() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const updateStatus = (s: HotspotStatus) => {
+    setStatus(s)
+    onStatusChange?.(s)
+  }
+
   useEffect(() => {
     fetchHotspotStatus()
-      .then(setStatus)
+      .then(updateStatus)
       .catch(() => setStatus(null))
 
     fetchInterfaces()
@@ -42,7 +47,7 @@ export default function HotspotControl() {
     setError(null)
     try {
       const s = await configureHotspot(ssid, password, selectedIface, autoStart)
-      setStatus(s)
+      updateStatus(s)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Unknown error')
     } finally {
@@ -55,7 +60,7 @@ export default function HotspotControl() {
     setError(null)
     try {
       const s = await stopHotspot()
-      setStatus(s)
+      updateStatus(s)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Unknown error')
     } finally {
