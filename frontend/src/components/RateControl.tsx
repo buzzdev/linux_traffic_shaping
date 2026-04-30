@@ -37,6 +37,7 @@ export default function RateControl({ iface, rates, onStatusChange }: Props) {
     setError(null)
     try {
       const status = await clearRate(iface)
+      setSelected(null)
       onStatusChange(status)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Unknown error')
