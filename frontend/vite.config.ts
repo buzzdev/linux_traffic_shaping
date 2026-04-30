@@ -2,6 +2,10 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
+// BACKEND_HOST can be overridden to point at a remote backend, e.g.:
+//   BACKEND_HOST=192.168.1.42 pnpm dev
+const backendHost = process.env.BACKEND_HOST ?? 'localhost'
+
 export default defineConfig({
   plugins: [react()],
   server: {
@@ -9,11 +13,11 @@ export default defineConfig({
     // Has no effect in production (Caddy handles routing there).
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: `http://${backendHost}:8000`,
         changeOrigin: true,
       },
       '/ws': {
-        target: 'ws://localhost:8000',
+        target: `ws://${backendHost}:8000`,
         ws: true,
       },
     },
