@@ -204,6 +204,50 @@ def start_hotspot(ssid: str, password: str, iface: str) -> None:
             f"Failed to start hotspot: {result.stderr.strip() or result.stdout.strip()}"
         )
 
+    # Docker Engine sets the FORWARD chain default policy to DROP, which blocks
+    # hotspot clients from routing through to the upstream interface.
+    # Insert rules into DOCKER-USER (which Docker never flushes) to allow it.
+    _fix_forwarding(iface)
+
+
+def _fix_forwarding(hotspot_iface: str) -> None:
+    """
+    Ensure Docker Engine's FORWARD DROP policy doesn't block hotspot NAT.
+    Inserts ACCEPT rules into the DOCKER-USER chain for traffic to/from
+    the hotspot interface, and ensures IP forwarding is enabled.
+    """
+    # Enable IP forwarding (NM shared should do this, but be explicit)
+    subprocess.run(
+        ["sysctl", "-w", "net.ipv4.ip_forward=1"],
+        capture_output=True, shell=False,
+    )
+
+    # Detect the DOCKER-USER chain — only present when Docker Engine is running
+    probe = subprocess.run(
+        ["iptables", "-L", "DOCKER-USER", "-n"],
+        capture_output=True, shell=False,
+    )
+    if probe.returncode != 0:
+        # No Docker, NM's own rules are sufficient
+        return
+
+    rules = [
+        # Allow all forwarded traffic originating from the hotspot interface
+        ["iptables", "-C", "DOCKER-USER", "-i", hotspot_iface, "-j", "ACCEPT"],
+        # Allow return traffic back to hotspot clients
+        ["iptables", "-C", "DOCKER-USER", "-o", hotspot_iface,
+         "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT"],
+    ]
+    insert_rules = [
+        ["iptables", "-I", "DOCKER-USER", "-i", hotspot_iface, "-j", "ACCEPT"],
+        ["iptables", "-I", "DOCKER-USER", "-o", hotspot_iface,
+         "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT"],
+    ]
+    for check, insert in zip(rules, insert_rules):
+        exists = subprocess.run(check, capture_output=True, shell=False)
+        if exists.returncode != 0:
+            subprocess.run(insert, capture_output=True, shell=False)
+
 
 def stop_hotspot(iface: str) -> None:
     """Disconnect the hotspot interface and remove the profile."""
