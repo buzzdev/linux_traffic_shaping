@@ -218,7 +218,7 @@ def _fix_forwarding(hotspot_iface: str) -> None:
     """
     # Enable IP forwarding (NM shared should do this, but be explicit)
     subprocess.run(
-        ["sysctl", "-w", "net.ipv4.ip_forward=1"],
+        ["sh", "-c", "echo 1 > /proc/sys/net/ipv4/ip_forward"],
         capture_output=True, shell=False,
     )
 
