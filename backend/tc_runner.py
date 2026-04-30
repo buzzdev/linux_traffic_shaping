@@ -8,6 +8,8 @@ validated against strict whitelists before any subprocess call.
 import json
 import re
 import subprocess
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -16,6 +18,24 @@ try:
     _mac_parser = _manuf_module.MacParser()
 except Exception:
     _mac_parser = None
+
+# Cache online OUI results so we never re-query the same MAC
+_vendor_cache: dict[str, Optional[str]] = {}
+
+
+def _lookup_vendor_online(mac: str) -> Optional[str]:
+    """Query macvendors.com for vendor name. Returns None on failure/rate-limit."""
+    if mac in _vendor_cache:
+        return _vendor_cache[mac]
+    try:
+        url = f"https://api.macvendors.com/{urllib.request.quote(mac)}"
+        req = urllib.request.Request(url, headers={"Accept": "text/plain"})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            vendor = resp.read().decode().strip() or None
+    except (urllib.error.HTTPError, urllib.error.URLError, Exception):
+        vendor = None
+    _vendor_cache[mac] = vendor
+    return vendor
 
 # ---------------------------------------------------------------------------
 # Constants (derived from scripts/config.sh)
@@ -276,13 +296,15 @@ def get_clients(iface: str) -> list[ClientInfo]:
             except (socket.herror, socket.gaierror):
                 pass
 
-    # OUI vendor + device type
+    # OUI vendor + device type — try online first, fall back to local manuf
     for c in clients.values():
-        if _mac_parser is not None:
+        vendor = _lookup_vendor_online(c.mac)
+        if vendor is None and _mac_parser is not None:
             try:
-                c.vendor = _mac_parser.get_manuf(c.mac) or None
+                vendor = _mac_parser.get_manuf(c.mac) or None
             except Exception:
                 pass
+        c.vendor = vendor
         c.device_type = _guess_device_type(c.hostname, c.vendor)
 
     return list(clients.values())
