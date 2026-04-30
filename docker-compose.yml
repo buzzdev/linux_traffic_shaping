@@ -17,10 +17,9 @@ services:
   backend:
     build: ./backend
     network_mode: host
-    cap_add:
-      - NET_ADMIN        # required for tc qdisc manipulation
+    privileged: true     # required for tc AND for nmcli→NM D-Bus/polkit authorization
     security_opt:
-      - apparmor:unconfined  # allow nmcli to connect to the host D-Bus socket
+      - apparmor:unconfined  # no-op on RPi OS (no AppArmor), keeps parity with other hosts
     volumes:
       # D-Bus socket so nmcli inside the container can reach the host's NetworkManager
       - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket
