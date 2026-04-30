@@ -8,8 +8,14 @@ validated against strict whitelists before any subprocess call.
 import json
 import re
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
+
+try:
+    from manuf import manuf as _manuf_module
+    _mac_parser = _manuf_module.MacParser()
+except Exception:
+    _mac_parser = None
 
 # ---------------------------------------------------------------------------
 # Constants (derived from scripts/config.sh)
@@ -174,6 +180,42 @@ class ClientInfo:
     signal_dbm: Optional[int] = None
     tx_kbps: Optional[int] = None
     rx_kbps: Optional[int] = None
+    vendor: Optional[str] = None
+    device_type: Optional[str] = None
+
+
+# Hostname patterns → device type labels
+_HOSTNAME_PATTERNS: list[tuple[re.Pattern, str]] = [
+    (re.compile(r"iphone", re.I), "iPhone"),
+    (re.compile(r"ipad", re.I), "iPad"),
+    (re.compile(r"macbook|mac-book", re.I), "MacBook"),
+    (re.compile(r"android|pixel|galaxy|samsung", re.I), "Android"),
+    (re.compile(r"windows|win-|desktop|laptop", re.I), "PC"),
+    (re.compile(r"raspberrypi|rpi", re.I), "Raspberry Pi"),
+]
+
+# Vendor name substrings → device type labels (fallback when hostname is unhelpful)
+_VENDOR_PATTERNS: list[tuple[re.Pattern, str]] = [
+    (re.compile(r"apple", re.I), "Apple device"),
+    (re.compile(r"samsung", re.I), "Samsung device"),
+    (re.compile(r"google", re.I), "Google device"),
+    (re.compile(r"qualcomm", re.I), "Android device"),
+    (re.compile(r"intel", re.I), "PC / Laptop"),
+    (re.compile(r"realtek", re.I), "PC / Laptop"),
+    (re.compile(r"raspberry", re.I), "Raspberry Pi"),
+]
+
+
+def _guess_device_type(hostname: Optional[str], vendor: Optional[str]) -> Optional[str]:
+    if hostname:
+        for pattern, label in _HOSTNAME_PATTERNS:
+            if pattern.search(hostname):
+                return label
+    if vendor:
+        for pattern, label in _VENDOR_PATTERNS:
+            if pattern.search(vendor):
+                return label
+    return None
 
 
 def get_clients(iface: str) -> list[ClientInfo]:
@@ -233,5 +275,14 @@ def get_clients(iface: str) -> list[ClientInfo]:
                 c.hostname = socket.gethostbyaddr(c.ip)[0]
             except (socket.herror, socket.gaierror):
                 pass
+
+    # OUI vendor + device type
+    for c in clients.values():
+        if _mac_parser is not None:
+            try:
+                c.vendor = _mac_parser.get_manuf(c.mac) or None
+            except Exception:
+                pass
+        c.device_type = _guess_device_type(c.hostname, c.vendor)
 
     return list(clients.values())

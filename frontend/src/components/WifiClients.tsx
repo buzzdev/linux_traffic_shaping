@@ -75,6 +75,12 @@ export default function WifiClients({ iface, hotspotActive }: Props) {
                 >
                   <td className="px-3 py-2">
                     <div className="font-mono text-xs text-slate-300">{c.mac}</div>
+                    {c.device_type && (
+                      <div className="text-xs text-blue-400 font-medium">{c.device_type}</div>
+                    )}
+                    {!c.device_type && c.vendor && (
+                      <div className="text-xs text-slate-500">{c.vendor}</div>
+                    )}
                     {c.hostname && (
                       <div className="text-xs text-slate-500">{c.hostname}</div>
                     )}

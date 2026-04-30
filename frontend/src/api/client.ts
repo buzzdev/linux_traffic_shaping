@@ -73,6 +73,8 @@ export interface ClientInfo {
   signal_dbm: number | null
   tx_kbps: number | null
   rx_kbps: number | null
+  vendor: string | null
+  device_type: string | null
 }
 
 export async function fetchClients(iface: string): Promise<ClientInfo[]> {

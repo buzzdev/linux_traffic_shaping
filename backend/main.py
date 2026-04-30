@@ -95,6 +95,8 @@ class ClientInfo(BaseModel):
     signal_dbm: Optional[int] = None
     tx_kbps: Optional[int] = None
     rx_kbps: Optional[int] = None
+    vendor: Optional[str] = None
+    device_type: Optional[str] = None
 
 
 class HotspotConfigureRequest(BaseModel):
@@ -222,6 +224,8 @@ def api_clients(iface: str) -> list[ClientInfo]:
             signal_dbm=c.signal_dbm,
             tx_kbps=c.tx_kbps,
             rx_kbps=c.rx_kbps,
+            vendor=c.vendor,
+            device_type=c.device_type,
         )
         for c in clients
     ]
