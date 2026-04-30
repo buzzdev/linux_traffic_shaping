@@ -78,17 +78,19 @@ export default function App() {
         </aside>
 
         {/* Right panel: live chart + client list */}
-        <section className="flex-1 p-6 min-h-[420px] lg:min-h-0 overflow-y-auto flex flex-col gap-6">
-          <div className="flex-1 min-h-[300px]">
+        <section className="flex-1 p-6 min-h-[420px] lg:min-h-0 overflow-hidden flex flex-col gap-4">
+          <div className="h-4/5 min-h-0">
             <NetworkChart
               iface={selectedIface}
               limitKbps={shapingActive ? (status?.rate_kbps ?? null) : null}
             />
           </div>
-          <WifiClients
-            iface={hotspotStatus?.iface ?? selectedIface}
-            hotspotActive={hotspotStatus?.active ?? false}
-          />
+          <div className="h-1/5 min-h-0 overflow-y-auto">
+            <WifiClients
+              iface={hotspotStatus?.iface ?? selectedIface}
+              hotspotActive={hotspotStatus?.active ?? false}
+            />
+          </div>
         </section>
       </main>
     </div>
