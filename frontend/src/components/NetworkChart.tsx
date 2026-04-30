@@ -88,7 +88,10 @@ export default function NetworkChart({ iface, limitKbps }: Props) {
               tick={{ fill: '#94a3b8', fontSize: 11 }}
               width={60}
               unit="bit/s"
-              domain={([, dataMax]: [number, number]) => [0, Math.max(dataMax * 1.15, 500)]}
+              domain={([, dataMax]: [number, number]) => [
+                0,
+                Math.max(dataMax * 1.15, limitKbps ? limitKbps * 1.15 : 0, 500),
+              ]}
             />
 
             <Tooltip
