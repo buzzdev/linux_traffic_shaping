@@ -63,6 +63,7 @@ export default function App() {
           <InterfaceSelector
             selected={selectedIface}
             onSelect={handleIfaceSelect}
+            status={status}
           />
 
           <RateControl

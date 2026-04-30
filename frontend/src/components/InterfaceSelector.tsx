@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
   fetchInterfaces,
-  fetchStatus,
   type IfaceInfo,
   type StatusInfo,
 } from '../api/client'
@@ -9,6 +8,7 @@ import {
 interface Props {
   selected: string
   onSelect: (iface: string) => void
+  status: StatusInfo | null
 }
 
 function formatRate(status: StatusInfo | null): string {
@@ -24,9 +24,8 @@ function ifaceLabel(i: IfaceInfo): string {
   return i.name
 }
 
-export default function InterfaceSelector({ selected, onSelect }: Props) {
+export default function InterfaceSelector({ selected, onSelect, status }: Props) {
   const [interfaces, setInterfaces] = useState<IfaceInfo[]>([])
-  const [status, setStatus] = useState<StatusInfo | null>(null)
   const [loading, setLoading] = useState(true)
 
   // Load interface list once; auto-select first wlan interface
@@ -43,14 +42,6 @@ export default function InterfaceSelector({ selected, onSelect }: Props) {
       .finally(() => setLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  // Refresh status badge whenever the selected interface changes
-  useEffect(() => {
-    if (!selected) return
-    fetchStatus(selected)
-      .then(setStatus)
-      .catch(() => setStatus(null))
-  }, [selected])
 
   const isActive = status?.active ?? false
 
